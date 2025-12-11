@@ -33,6 +33,8 @@ struct Args {
     command: Vec<String>,
     #[arg(short, long, help = "Enable verbose output")]
     verbose: bool,
+    #[arg(short, long, help = "Enable debug logging to file")]
+    debug: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -43,6 +45,8 @@ enum ClientError {
     ProtocolError(#[from] broadcast_protocol::ProtocolError),
     #[error("Join Error: {0}")]
     JoinError(#[from] tokio::task::JoinError),
+    #[error("Log Setup Error: {0}")]
+    LogSetupError(#[from] tracing::subscriber::SetGlobalDefaultError),
 }
 
 type ClientResult<T> = Result<T, ClientError>;
@@ -51,13 +55,7 @@ type ClientResult<T> = Result<T, ClientError>;
 async fn main() -> ClientResult<()> {
     let args = Args::parse();
 
-    let level = if args.verbose {
-        Level::DEBUG
-    } else {
-        Level::INFO
-    };
-
-    tracing_subscriber::fmt().with_max_level(level).init();
+    let _log_guard = setup_logging(args.debug, args.verbose)?;
 
     let cmd = args.command.join(" ");
 
@@ -86,6 +84,33 @@ async fn main() -> ClientResult<()> {
 
     let exit_code = handle_response(stream, stdin_is_tty).await?;
     std::process::exit(exit_code);
+}
+
+fn setup_logging(
+    debug: bool,
+    verbose: bool,
+) -> ClientResult<Option<tracing_appender::non_blocking::WorkerGuard>> {
+    let level = if debug || verbose {
+        Level::DEBUG
+    } else {
+        Level::INFO
+    };
+
+    if debug {
+        let file_appender = tracing_appender::rolling::daily("logs", "broadcast-client.log");
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+        tracing_subscriber::fmt()
+            .with_max_level(level)
+            .with_writer(non_blocking)
+            .init();
+
+        tracing::debug!("Debug logging enabled");
+        return Ok(Some(guard));
+    }
+
+    tracing_subscriber::fmt().with_max_level(level).init();
+    Ok(None)
 }
 
 async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<i32> {
