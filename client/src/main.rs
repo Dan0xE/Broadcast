@@ -67,6 +67,10 @@ async fn main() -> ClientResult<()> {
     let addr = format!("127.0.0.1:{}", PORT);
     let mut stream = TcpStream::connect(&addr).await?;
 
+    // disable Nagle's algorithm, we need to disable TCP buffering for interactive commands,
+    // otherwise we get weird issues
+    stream.set_nodelay(true)?;
+
     let terminal_size = if stdin_is_tty {
         use crossterm::terminal;
         terminal::size().ok()
@@ -77,14 +81,13 @@ async fn main() -> ClientResult<()> {
     let request = CommandRequest {
         command: cmd.clone(),
         working_dir: cwd,
-        // NOTE The input task needs to send the actual terminal size later
-        terminal_size: None,
+        terminal_size,
     };
 
     let msg = broadcast_protocol::encode_msg(&request)?;
     stream.write_all(&msg).await?;
 
-    let exit_code = handle_response(stream, stdin_is_tty, terminal_size).await?;
+    let exit_code = handle_response(stream, stdin_is_tty).await?;
     std::process::exit(exit_code);
 }
 
@@ -113,11 +116,7 @@ fn setup_logging(
     Ok(None)
 }
 
-async fn handle_response(
-    stream: TcpStream,
-    stdin_is_tty: bool,
-    terminal_size: Option<(u16, u16)>,
-) -> ClientResult<i32> {
+async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<i32> {
     use crossterm::{
         event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
         terminal::{disable_raw_mode, enable_raw_mode},
@@ -157,17 +156,6 @@ async fn handle_response(
     });
 
     let input_task = tokio::spawn(async move {
-        // Send initial size
-        if let Some((cols, rows)) = terminal_size {
-            tracing::debug!(
-                "Initial resize: setting size to {} cols and {} rows",
-                cols,
-                rows
-            );
-            let msg = encode_msg(&ClientMessage::Resize(rows, cols))?;
-            stream_write.write_all(&msg).await?;
-        }
-
         loop {
             if event::poll(Duration::from_millis(100))? {
                 match event::read()? {
@@ -201,7 +189,7 @@ async fn handle_response(
                     }
                     Event::Resize(cols, rows) => {
                         tracing::debug!("Resize event: resized to {} cols and {} rows", cols, rows);
-                        let msg = encode_msg(&ClientMessage::Resize(rows, cols))?;
+                        let msg = encode_msg(&ClientMessage::Resize(cols, rows))?;
                         stream_write.write_all(&msg).await?;
                     }
                     _ => {}

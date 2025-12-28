@@ -61,8 +61,7 @@ checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 [[package]]
 name = "bincode"
 version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36eaf5d7b090263e8150820482d5d93cd964a81e4019913c972f4edcc6edb740"
+source = "git+https://github.com/Dan0xE/bincode-fork.git#4cd6e7866cf7b0dd3396811f336382ea1bae4243"
 dependencies = [
  "bincode_derive",
  "serde",
@@ -72,8 +71,7 @@ dependencies = [
 [[package]]
 name = "bincode_derive"
 version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf95709a440f45e986983918d0e8a1f30a9b1df04918fc828670606804ac3c09"
+source = "git+https://github.com/Dan0xE/bincode-fork.git#4cd6e7866cf7b0dd3396811f336382ea1bae4243"
 dependencies = [
  "virtue",
 ]

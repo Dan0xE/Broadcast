@@ -54,7 +54,10 @@ async fn main() -> ServerResult<()> {
     }
 }
 
-async fn handle_client(mut socket: TcpStream) -> ServerResult<()> {
+async fn handle_client(socket: TcpStream) -> ServerResult<()> {
+    socket.set_nodelay(true)?;
+
+    let mut socket = socket;
     let mut request = broadcast_protocol::decode_msg::<CommandRequest>(&mut socket).await?;
 
     tracing::info!(
@@ -72,7 +75,7 @@ async fn handle_command(socket: TcpStream, req: CommandRequest) -> ServerResult<
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
     use std::io::{Read, Write};
 
-    let (rows, cols) = req.terminal_size.unwrap_or((24, 80));
+    let (cols, rows) = req.terminal_size.unwrap_or((80, 24));
 
     let pty_size = PtySize {
         rows,
@@ -131,6 +134,7 @@ async fn handle_command(socket: TcpStream, req: CommandRequest) -> ServerResult<
             let response = CommandResponse::Stdout(data);
             let msg = broadcast_protocol::encode_msg(&response)?;
             sock_write.write_all(&msg).await?;
+            sock_write.flush().await?;
         }
 
         Ok::<_, ServerError>(sock_write)
@@ -150,7 +154,7 @@ async fn handle_command(socket: TcpStream, req: CommandRequest) -> ServerResult<
 
                         tracing::debug!("Wrote {} bytes to PTY", data.len());
                     }
-                    ClientMessage::Resize(rows, cols) => {
+                    ClientMessage::Resize(cols, rows) => {
                         let size = PtySize {
                             rows,
                             cols,
