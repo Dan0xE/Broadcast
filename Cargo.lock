@@ -97,6 +97,7 @@ dependencies = [
  "futures",
  "termina",
  "terminput",
+ "terminput-termina",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -691,6 +692,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb2e8e835e040588586eb480bd465b41e1164d507190cce0c7153bb56b27614d"
 dependencies = [
  "bitflags 2.10.0",
+]
+
+[[package]]
+name = "terminput-termina"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3772ad4905be60356b74d3265eed68a0cb8f1f013c6da078d49f06ea1a122fef"
+dependencies = [
+ "termina",
+ "terminput",
 ]
 
 [[package]]

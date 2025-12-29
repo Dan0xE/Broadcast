@@ -198,7 +198,7 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
                 };
 
                 let result: ClientResult<()> = async {
-                    match &event {
+                    match event {
                         termina::Event::Key(key_event) => {
                             if key_event.kind != termina::event::KeyEventKind::Press {
                                 return Ok(());
@@ -230,7 +230,7 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
                                 )));
                             }
 
-                            if let Some(bytes) = event_to_bytes(&event) {
+                            if let Some(bytes) = key_event_to_bytes(key_event) {
                                 let msg = encode_msg(&ClientMessage::Input(bytes))?;
                                 stream_write.write_all(&msg).await?;
                             }
@@ -296,79 +296,21 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
     Ok(exit_code)
 }
 
-fn event_to_bytes(event: &termina::Event) -> Option<Vec<u8>> {
+fn key_event_to_bytes(key_event: termina::event::KeyEvent) -> Option<Vec<u8>> {
     use terminput::Encoding;
 
-    match event {
-        termina::Event::Key(key) => {
-            let mut buf = [0u8; 32];
-            let event = convert_key_event_to_terminput(key)?;
-            let len = event.encode(&mut buf, Encoding::Xterm).ok()?;
-            Some(buf[..len].to_vec())
-        }
-        _ => {
-            tracing::debug!("Unhandled event type for encoding: {:?}", event);
-            None
-        }
-    }
+    let mut buf = [0u8; 32];
+    let terminput_key_event = terminput_termina::to_terminput_key(key_event).ok()?;
+    let terminput_event = terminput::Event::Key(terminput_key_event);
+    let len = terminput_event.encode(&mut buf, Encoding::Xterm).ok()?;
+    Some(buf[..len].to_vec())
 }
 
-fn convert_key_event_to_terminput(key: &termina::event::KeyEvent) -> Option<terminput::Event> {
-    use terminput::{
-        Event, KeyCode, KeyEvent as TermInputKeyEvent, KeyEventKind, KeyEventState, KeyModifiers,
-    };
+fn event_to_bytes(event: termina::Event) -> Option<Vec<u8>> {
+    use terminput::Encoding;
 
-    let code = match &key.code {
-        termina::event::KeyCode::Char(c) => KeyCode::Char(*c),
-        termina::event::KeyCode::Enter => KeyCode::Enter,
-        termina::event::KeyCode::Backspace => KeyCode::Backspace,
-        termina::event::KeyCode::Tab => KeyCode::Tab,
-        termina::event::KeyCode::Escape => KeyCode::Esc,
-        termina::event::KeyCode::BackTab => KeyCode::Tab,
-        termina::event::KeyCode::Up => KeyCode::Up,
-        termina::event::KeyCode::Down => KeyCode::Down,
-        termina::event::KeyCode::Left => KeyCode::Left,
-        termina::event::KeyCode::Right => KeyCode::Right,
-        termina::event::KeyCode::Home => KeyCode::Home,
-        termina::event::KeyCode::End => KeyCode::End,
-        termina::event::KeyCode::PageUp => KeyCode::PageUp,
-        termina::event::KeyCode::PageDown => KeyCode::PageDown,
-        termina::event::KeyCode::Delete => KeyCode::Delete,
-        termina::event::KeyCode::Insert => KeyCode::Insert,
-        termina::event::KeyCode::Function(n) => KeyCode::F(*n),
-        termina::event::KeyCode::Null => return None,
-        termina::event::KeyCode::KeypadBegin => return None,
-        termina::event::KeyCode::CapsLock => return None,
-        termina::event::KeyCode::ScrollLock => return None,
-        termina::event::KeyCode::NumLock => return None,
-        termina::event::KeyCode::PrintScreen => return None,
-        termina::event::KeyCode::Pause => return None,
-        termina::event::KeyCode::Menu => return None,
-        termina::event::KeyCode::Modifier(_) => return None,
-        termina::event::KeyCode::Media(_) => return None,
-    };
-
-    let mut modifiers = KeyModifiers::empty();
-    if key.modifiers.contains(termina::event::Modifiers::SHIFT) {
-        modifiers |= KeyModifiers::SHIFT;
-    }
-    if key.modifiers.contains(termina::event::Modifiers::CONTROL) {
-        modifiers |= KeyModifiers::CTRL;
-    }
-    if key.modifiers.contains(termina::event::Modifiers::ALT) {
-        modifiers |= KeyModifiers::ALT;
-    }
-
-    let kind = match key.kind {
-        termina::event::KeyEventKind::Press => KeyEventKind::Press,
-        termina::event::KeyEventKind::Repeat => KeyEventKind::Repeat,
-        termina::event::KeyEventKind::Release => KeyEventKind::Release,
-    };
-
-    Some(Event::Key(TermInputKeyEvent {
-        code,
-        modifiers,
-        kind,
-        state: KeyEventState::empty(),
-    }))
+    let mut buf = [0u8; 32];
+    let terminput_event = terminput_termina::to_terminput(event).ok()?;
+    let len = terminput_event.encode(&mut buf, Encoding::Xterm).ok()?;
+    Some(buf[..len].to_vec())
 }
