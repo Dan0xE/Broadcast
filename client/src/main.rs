@@ -119,14 +119,8 @@ struct RawModeGuard {
 }
 
 impl RawModeGuard {
-    fn new(enable: bool) -> ClientResult<Self> {
-        let term_handle = if enable {
-            Some(termina::PlatformTerminal::new()?)
-        } else {
-            None
-        };
-
-        Ok(Self { term_handle })
+    fn new(term: Option<termina::PlatformTerminal>) -> Self {
+        Self { term_handle: term }
     }
 }
 
@@ -143,15 +137,6 @@ impl Drop for RawModeGuard {
 }
 
 async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<i32> {
-    // raw mode is disabled even if we return early or panic
-    let _raw_mode_guard = RawModeGuard::new(stdin_is_tty)?;
-
-    let terminal = if stdin_is_tty {
-        Some(termina::PlatformTerminal::new()?)
-    } else {
-        None
-    };
-
     let (mut stream_read, mut stream_write) = stream.into_split();
 
     let output_task: JoinHandle<ClientResult<i32>> = tokio::spawn(async move {
@@ -183,11 +168,14 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
 
     let local_set = tokio::task::LocalSet::new();
 
-    let input_task = if let Some(term) = terminal {
+    let (input_task, _raw_mode_guard) = if stdin_is_tty {
+        let mut term = termina::PlatformTerminal::new()?;
+        term.enter_raw_mode()?;
+
         let event_reader = term.event_reader();
         let mut event_stream = EventStream::new(event_reader, |_| true);
 
-        local_set.spawn_local(async move {
+        let task = local_set.spawn_local(async move {
             while let Some(result) = event_stream.next().await {
                 let event = match result {
                     Ok(e) => e,
@@ -264,9 +252,14 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
                 }
             }
             Ok::<_, ClientError>(())
-        })
+        });
+
+        let guard = RawModeGuard::new(Some(term));
+        (task, guard)
     } else {
-        local_set.spawn_local(async { Ok::<_, ClientError>(()) })
+        let task = local_set.spawn_local(async { Ok::<_, ClientError>(()) });
+        let guard = RawModeGuard::new(None);
+        (task, guard)
     };
 
     // wait for either task to complete
@@ -291,8 +284,9 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
 
     let exit_code = exit_code?;
 
-    // cleanup gets done trhough the RawModeGuard drop
+    drop(local_set);
 
+    // cleanup gets done through the RawModeGuard drop
     Ok(exit_code)
 }
 
