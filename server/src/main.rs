@@ -32,7 +32,7 @@ async fn main() -> ServerResult<()> {
         .with_max_level(Level::DEBUG)
         .init();
 
-    let addr = format!("127.0.0.1:{}", PORT);
+    let addr = format!("0.0.0.0:{}", PORT);
     let listener = TcpListener::bind(&addr).await?;
 
     tracing::info!("Listening on {}", addr);
