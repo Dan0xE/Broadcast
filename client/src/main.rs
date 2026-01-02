@@ -33,6 +33,8 @@ struct Args {
     verbose: bool,
     #[arg(short, long, help = "Enable debug logging to file")]
     debug: bool,
+    #[arg(short, long, help = "Specify the IP address of the broadcast server")]
+    ip: Option<String>,
     // shell, can overwrite default / config value
 }
 
@@ -62,7 +64,9 @@ async fn main() -> ClientResult<()> {
 
     let stdin_is_tty = std::io::stdin().is_terminal();
 
-    let addr = format!("127.0.0.1:{}", PORT);
+    let ip = args.ip.unwrap_or_else(|| "127.0.0.1".into());
+    let addr = format!("{ip}:{PORT}");
+
     let mut stream = TcpStream::connect(&addr).await?;
 
     // disable Nagle's algorithm, we need to disable TCP buffering for interactive commands,
@@ -120,15 +124,8 @@ fn setup_logging(
 }
 
 #[cfg(not(feature = "debug-logging"))]
-fn setup_logging(
-    _debug: bool,
-    verbose: bool,
-) -> ClientResult<Option<()>> {
-    let level = if verbose {
-        Level::DEBUG
-    } else {
-        Level::INFO
-    };
+fn setup_logging(_debug: bool, verbose: bool) -> ClientResult<Option<()>> {
+    let level = if verbose { Level::DEBUG } else { Level::INFO };
 
     tracing_subscriber::fmt().with_max_level(level).init();
     Ok(None)
