@@ -60,14 +60,27 @@ async fn handle_client(socket: TcpStream) -> ServerResult<()> {
     let mut socket = socket;
     let mut request = broadcast_protocol::decode_msg::<CommandRequest>(&mut socket).await?;
 
+    let path = if request.wsl_mode {
+        convert_win_to_wsl_path(&request.working_dir)?
+    } else {
+        request.working_dir.clone()
+    };
+
+    if !path.exists() {
+        return Err(ServerError::InvalidPath(format!(
+            "The specified working directory does not exist: {:?}",
+            path
+        )));
+    }
+
+    request.working_dir = path;
+
     tracing::info!(
-        "Executing command: {} in: {}",
+        "Executing command: {} in: {:?}",
         request.command,
         request.working_dir
     );
 
-    let wsl_path = convert_win_to_wsl_path(&request.working_dir)?;
-    request.working_dir = wsl_path;
     handle_command(socket, request).await
 }
 
@@ -193,26 +206,22 @@ async fn handle_command(socket: TcpStream, req: CommandRequest) -> ServerResult<
 }
 
 /// Converts a given windows path to a wsl path, E.g., "C:\Users\Username" -> "/mnt/c/Users/Username"
-fn convert_win_to_wsl_path(win_path: &str) -> ServerResult<String> {
-    let mut chars = win_path.chars();
+fn convert_win_to_wsl_path(win_path: &PathBuf) -> ServerResult<PathBuf> {
+    let path_str = win_path.to_string_lossy();
+    let mut chars = path_str.chars();
     let Some(next) = chars.next() else {
         return Err(ServerError::InvalidPath("Empty path provided".to_string()));
     };
     let drive_letter = next.to_ascii_lowercase();
     let rest_of_path: String = chars.collect();
     let rest_of_path = rest_of_path.replace('\\', "/");
-    let converted_path = format!(
+    let converted_path_str = format!(
         "/mnt/{}{}",
         drive_letter,
         rest_of_path.trim_start_matches(':')
     );
 
-    if !PathBuf::from(&converted_path).exists() {
-        return Err(ServerError::InvalidPath(format!(
-            "Converted path '{}' is invalid",
-            converted_path
-        )));
-    };
+    let converted_path = PathBuf::from(converted_path_str);
 
     Ok(converted_path)
 }
@@ -224,14 +233,15 @@ mod tests {
     #[test]
     fn test_path_conversion() {
         assert_eq!(
-            convert_win_to_wsl_path("C:\\Users").unwrap(),
-            "/mnt/c/Users"
-        );
-        assert_eq!(
-            convert_win_to_wsl_path("D:\\Projects\\Dan0xe\\Code\\Broadcast").unwrap(),
-            "/mnt/d/Projects/Dan0xe/Code/Broadcast"
+            convert_win_to_wsl_path(&PathBuf::from("C:\\Users\\Username")).unwrap(),
+            PathBuf::from("/mnt/c/Users/Username")
         );
 
-        assert!(convert_win_to_wsl_path("").is_err());
+        assert_eq!(
+            convert_win_to_wsl_path(&PathBuf::from("D:\\Projects\\Test")).unwrap(),
+            PathBuf::from("/mnt/d/Projects/Test")
+        );
+
+        assert!(convert_win_to_wsl_path(&PathBuf::from("")).is_err());
     }
 }

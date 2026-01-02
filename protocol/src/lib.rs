@@ -1,10 +1,13 @@
+use std::path::PathBuf;
+
 use bincode::{Decode, Encode, error as BincodeError};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Decode, Encode)]
 pub struct CommandRequest {
     pub command: String,
-    pub working_dir: String,
+    pub working_dir: PathBuf,
+    pub wsl_mode: bool,
     pub terminal_size: Option<(u16, u16)>,
 }
 

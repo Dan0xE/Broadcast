@@ -2,6 +2,7 @@ use futures_util::StreamExt;
 use std::{
     env,
     io::{IsTerminal, Write, stdout},
+    path::PathBuf,
 };
 use termina::{EventStream, Terminal as _};
 use tokio::net::TcpStream;
@@ -35,19 +36,34 @@ struct Args {
     debug: bool,
     #[arg(short, long, help = "Specify the IP address of the broadcast server")]
     ip: Option<String>,
-    // shell, can overwrite default / config value
+    #[arg(
+        default_value = ".",
+        long,
+        help = "Specify the directory to run the command in on the server. Defaults to current directory. This is useful when broadcasting from windows to WSL in combination with the --wsl-mode flag"
+    )]
+    dir: PathBuf,
+    #[arg(short, long, help = "Converts a given directory to WSL path format")]
+    wsl_mode: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
 enum ClientError {
     #[error("IO Error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("Invalid UTF-8 in path: {0}")]
+    InvalidPath(String),
     #[error("Protocol Error: {0}")]
     Protocol(#[from] broadcast_protocol::ProtocolError),
     #[error("Join Error: {0}")]
     Join(#[from] tokio::task::JoinError),
     #[error("Log Setup Error: {0}")]
     LogSetup(#[from] tracing::subscriber::SetGlobalDefaultError),
+}
+
+impl From<std::ffi::OsString> for ClientError {
+    fn from(value: std::ffi::OsString) -> Self {
+        ClientError::InvalidPath(value.to_string_lossy().into_owned())
+    }
 }
 
 type ClientResult<T> = Result<T, ClientError>;
@@ -60,7 +76,11 @@ async fn main() -> ClientResult<()> {
 
     let cmd = args.command.join(" ");
 
-    let cwd = env::current_dir()?.to_string_lossy().to_string();
+    let cwd = if args.dir == PathBuf::from(".") {
+        env::current_dir()?
+    } else {
+        args.dir
+    };
 
     let stdin_is_tty = std::io::stdin().is_terminal();
 
@@ -83,6 +103,7 @@ async fn main() -> ClientResult<()> {
     let request = CommandRequest {
         command: cmd.clone(),
         working_dir: cwd,
+        wsl_mode: args.wsl_mode,
         terminal_size,
     };
 
