@@ -100,12 +100,20 @@ async fn handle_command(socket: TcpStream, req: CommandRequest) -> ServerResult<
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(pty_size)?;
 
-    // TODO shell make configurable from the client
     let shell = "sh";
     let mut cmd = CommandBuilder::new(shell);
     cmd.cwd(&req.working_dir);
-    cmd.arg("-c");
-    cmd.arg(&req.command);
+
+    if req.interactive {
+        if !req.command.is_empty() {
+            let wrapped_command = format!("{}; sh", req.command);
+            cmd.arg("-c");
+            cmd.arg(&wrapped_command);
+        }
+    } else {
+        cmd.arg("-c");
+        cmd.arg(&req.command);
+    }
 
     let mut child = pair.slave.spawn_command(cmd)?;
 

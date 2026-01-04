@@ -24,7 +24,7 @@ use clap::Parser;
 #[command(arg_required_else_help = true)]
 struct Args {
     #[arg(
-        required = true,
+        required_unless_present = "interactive",
         trailing_var_arg = true,
         allow_hyphen_values = true,
         help = "The command to broadcast"
@@ -34,6 +34,8 @@ struct Args {
     verbose: bool,
     #[arg(short, long, help = "Enable debug logging to file")]
     debug: bool,
+    #[arg(short = 'i', long, help = "Launch an interactive shell session")]
+    interactive: bool,
     #[arg(short, long, help = "Specify the IP address of the broadcast server")]
     ip: Option<String>,
     #[arg(
@@ -105,6 +107,7 @@ async fn main() -> ClientResult<()> {
         working_dir: cwd,
         wsl_mode: args.wsl_mode,
         terminal_size,
+        interactive: args.interactive,
     };
 
     let msg = broadcast_protocol::encode_msg(&request)?;

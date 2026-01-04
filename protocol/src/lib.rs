@@ -5,10 +5,16 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Decode, Encode)]
 pub struct CommandRequest {
+    /// The command to execute
     pub command: String,
+    /// The working directory for the command to be executed in
     pub working_dir: PathBuf,
+    /// Whether to convert Windows paths to WSL paths
     pub wsl_mode: bool,
+    /// The terminal size (cols, rows) if applicable
     pub terminal_size: Option<(u16, u16)>,
+    /// Whether to spawn an interactive shell instead of running a single command
+    pub interactive: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Decode, Encode)]
