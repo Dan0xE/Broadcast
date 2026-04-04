@@ -2,8 +2,9 @@
 // TODO give user the option to start server in vebose mode (config file? command line arg?)
 // TODO give the user the option to choose what shell to use
 
-use broadcast_protocol::{ClientMessage, CommandRequest, CommandResponse, PORT};
 use std::path::PathBuf;
+
+use broadcast_protocol::{ClientMessage, CommandRequest, CommandResponse, PORT};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
@@ -28,9 +29,7 @@ pub type ServerResult<T> = Result<T, ServerError>;
 #[tokio::main]
 async fn main() -> ServerResult<()> {
     // TODO change this and make configurable
-    tracing_subscriber::fmt()
-        .with_max_level(Level::DEBUG)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::DEBUG).init();
 
     let addr = format!("0.0.0.0:{}", PORT);
     let listener = TcpListener::bind(&addr).await?;
@@ -75,27 +74,19 @@ async fn handle_client(socket: TcpStream) -> ServerResult<()> {
 
     request.working_dir = path;
 
-    tracing::info!(
-        "Executing command: {} in: {:?}",
-        request.command,
-        request.working_dir
-    );
+    tracing::info!("Executing command: {} in: {:?}", request.command, request.working_dir);
 
     handle_command(socket, request).await
 }
 
 async fn handle_command(socket: TcpStream, req: CommandRequest) -> ServerResult<()> {
-    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
     use std::io::{Read, Write};
+
+    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
     let (cols, rows) = req.terminal_size.unwrap_or((80, 24));
 
-    let pty_size = PtySize {
-        rows,
-        cols,
-        pixel_width: 0,
-        pixel_height: 0,
-    };
+    let pty_size = PtySize { rows, cols, pixel_width: 0, pixel_height: 0 };
 
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(pty_size)?;
@@ -176,12 +167,7 @@ async fn handle_command(socket: TcpStream, req: CommandRequest) -> ServerResult<
                         tracing::debug!("Wrote {} bytes to PTY", data.len());
                     }
                     ClientMessage::Resize(cols, rows) => {
-                        let size = PtySize {
-                            rows,
-                            cols,
-                            pixel_width: 0,
-                            pixel_height: 0,
-                        };
+                        let size = PtySize { rows, cols, pixel_width: 0, pixel_height: 0 };
                         pty_master.resize(size)?;
                         tracing::debug!("Resized PTY to {} rows and {} cols", rows, cols);
                     }
@@ -223,11 +209,8 @@ fn convert_win_to_wsl_path(win_path: &PathBuf) -> ServerResult<PathBuf> {
     let drive_letter = next.to_ascii_lowercase();
     let rest_of_path: String = chars.collect();
     let rest_of_path = rest_of_path.replace('\\', "/");
-    let converted_path_str = format!(
-        "/mnt/{}{}",
-        drive_letter,
-        rest_of_path.trim_start_matches(':')
-    );
+    let converted_path_str =
+        format!("/mnt/{}{}", drive_letter, rest_of_path.trim_start_matches(':'));
 
     let converted_path = PathBuf::from(converted_path_str);
 

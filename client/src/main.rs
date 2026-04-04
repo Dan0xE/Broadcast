@@ -1,13 +1,6 @@
-use futures_util::StreamExt;
-use std::{
-    env,
-    io::{IsTerminal, Write, stdout},
-    path::PathBuf,
-};
-use termina::{EventStream, Terminal as _};
-use tokio::net::TcpStream;
-use tokio::{io::AsyncWriteExt, task::JoinHandle};
-use tracing::Level;
+use std::env;
+use std::io::{IsTerminal, Write, stdout};
+use std::path::PathBuf;
 
 // TODO have install command, that downloads the server trough "broadcast setup"
 // TODO give the user a command to setup aliases in their shell (broadcast install -c "command" -a "alias")
@@ -17,6 +10,12 @@ use broadcast_protocol::{
     ClientMessage, CommandRequest, CommandResponse, PORT, decode_msg, encode_msg,
 };
 use clap::Parser;
+use futures_util::StreamExt;
+use termina::{EventStream, Terminal as _};
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::task::JoinHandle;
+use tracing::Level;
 
 #[derive(clap::Parser, Debug)]
 #[command(name = "broadcast", about = "Broadcast commands to WSL")]
@@ -78,11 +77,7 @@ async fn main() -> ClientResult<()> {
 
     let cmd = args.command.join(" ");
 
-    let cwd = if args.dir == PathBuf::from(".") {
-        env::current_dir()?
-    } else {
-        args.dir
-    };
+    let cwd = if args.dir == PathBuf::from(".") { env::current_dir()? } else { args.dir };
 
     let stdin_is_tty = std::io::stdin().is_terminal();
 
@@ -122,11 +117,7 @@ fn setup_logging(
     debug: bool,
     verbose: bool,
 ) -> ClientResult<Option<tracing_appender::non_blocking::WorkerGuard>> {
-    let level = if debug || verbose {
-        Level::DEBUG
-    } else {
-        Level::INFO
-    };
+    let level = if debug || verbose { Level::DEBUG } else { Level::INFO };
 
     // write to file if debug is enabled
     if debug {
@@ -234,9 +225,7 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
                             }
 
                             if key_event.code == termina::event::KeyCode::Char('c')
-                                && key_event
-                                    .modifiers
-                                    .contains(termina::event::Modifiers::CONTROL)
+                                && key_event.modifiers.contains(termina::event::Modifiers::CONTROL)
                             {
                                 let msg = encode_msg(&ClientMessage::Input(vec![3]))?;
                                 stream_write.write_all(&msg).await?;
@@ -247,9 +236,7 @@ async fn handle_response(stream: TcpStream, stdin_is_tty: bool) -> ClientResult<
                             }
 
                             if key_event.code == termina::event::KeyCode::Char('d')
-                                && key_event
-                                    .modifiers
-                                    .contains(termina::event::Modifiers::CONTROL)
+                                && key_event.modifiers.contains(termina::event::Modifiers::CONTROL)
                             {
                                 let msg = encode_msg(&ClientMessage::Eof)?;
                                 stream_write.write_all(&msg).await?;
