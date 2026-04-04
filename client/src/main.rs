@@ -36,7 +36,7 @@ struct Args {
     debug: bool,
     #[arg(short = 'i', long, help = "Launch an interactive shell session")]
     interactive: bool,
-    #[arg(short, long, help = "Specify the IP address of the broadcast server")]
+    #[arg(long, help = "Specify the IP address of the broadcast server")]
     ip: Option<String>,
     #[arg(
         default_value = ".",
